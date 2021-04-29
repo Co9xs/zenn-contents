@@ -64,7 +64,7 @@ event delegationの破壊的変更がどんな影響を与えるのかを知る�
 
 実際の動きと一緒に確認してみてください。非常によくあるUIですね。
 
---- gif ---
+@[codepen](https://codepen.io/co9xsr/pen/wvgbgKx?default-tab=result)
 
 いきなりですが、このPopupMenuコンポーネントをReact16で動作するように実装したコードの全体像を載せておきます。
 
@@ -182,16 +182,18 @@ const removeOutsideClickHandler = useCallback(() => {
 単に範囲外クリックを検知するためのイベントリスナを登録するだけなら、`document.body`などの要素でも問題ないように思えます。
 
 その答えは、React16までのevent delegationでは`document`に対してイベントが委譲されるという点と関係しています。
-仮に`document.body`などの`document`よりも下の階層にこのイベントリスナを登録した場合どんな挙動をするか確認してみます。
 
---- gif or CodePen ---
-
-openボタンでメニューを開き、closeボタンか範囲外クリックでメニューを閉じるということは問題なくできています。
-しかし、メニューが開いている状態で、再度openボタンをクリックしてみると、閉じることができません。
-
-何が起きているのかを以下にまとめてみました。
+より詳しく知るために、React16で`document`に対して`outsideClickHandler`を追加した場合と`document.body`に対して`outsideClickHandler`を追加した場合を比較してみます。
 
 ### `document.body`に範囲外クリックのイベントリスナを設定した場合の処理の流れ（悪い例）
+openボタンでメニュー表示、closeボタンまたは範囲外クリックでメニューを閉じるとこまではうまく動いています。
+ただ、メニューが開いている状態でopenボタンをクリックしてもメニューが閉じてくれません。
+
+@[codepen](https://codepen.io/co9xsr/pen/oNBRBvY?default-tab=js,result)
+
+何が起きているのかをまとめてみました。
+是非、何度も読みながら試してみてください。
+
 1. 最初にopenボタンを押す
 2. openボタンから`document`に委譲されたイベントハンドラによって、メニューを表示し`document.body`に`outsideClickHandler`を追加
 3. 再度openボタンを押すと`document` > `document.body`の階層関係であるので、バブリングによって`document.body`の処理→`document`の処理の順番で発火
@@ -205,6 +207,14 @@ openボタンでメニューを開き、closeボタンか範囲外クリック�
 `outsideClickHandler`に`e.stopPropagation()`を加えることでも3のバブリングを防げるのでうまく動きますが、今回はevent delegationの挙動を理解する目的のため、`document`に設定する方法で対処していきます。
 :::
 ### `document`に範囲外クリックのイベントリスナを設定した場合の処理の流れ（良い例）
+こちらは最初に掲示したとおり、`document`に対して`outsideClickHandler`を追加した場合のコードです。
+これは期待通りに動いてくれていますね。
+
+@[codepen](https://codepen.io/co9xsr/pen/wvgbgKx?default-tab=js,result)
+
+こちらも何が起きているのかをまとめてみました。
+何度も読みながら試してみると理解が深まるかもしれません。
+
 1. 最初にopenボタンを押す
 2. openボタンから`document`に委譲されたイベントハンドラによって、メニューを表示し`document`に`outsideClickHandler`を追加
 3. 再度openボタンを押すとどちらも`document`に対するイベントハンドラが設定されているので、追加された順番で発火
@@ -265,7 +275,7 @@ export const PopupMenu: React.VFC<Props> = (props) => {
 
 これを動作確認すると、そもそもopenボタンを押しても開くことができません。
 
--- gif or CodePen ---
+@[codepen](https://codepen.io/co9xsr/pen/OJWYbqz?default-tab=js,result)
 
 React17ではイベントの委譲先がrootNodeになったということを思い出して、どんな処理が起きているのかを考えてみましょう。
 
@@ -274,7 +284,8 @@ React17ではイベントの委譲先がrootNodeになったということを�
 3. 2の終了時で`document` > `div#app`の階層関係なのでバブリングによって`document`の処理も即座に発火する
 4. `document`の処理でメニューを消して、`document`から`outsideClickHandler`を削除
 
-つまり、openボタンを押してメニューを表示した瞬間に、`document`に設定した`outsideClickHandler`でメニューが非表示にされてしまうということです。
+つまり問題は1回目にopenボタンを押した、バブリングによって`document`に設定した処理も発火している点です。
+そのせいでメニューが表示になった瞬間にメニューが非表示にされてしまうということです。
 
 これを動くように修正していきます。
 ## コードを修正する
@@ -285,12 +296,12 @@ React17ではイベントの委譲先がrootNodeになったということを�
 ...
   const addOutsideClickHandler = useCallback(() => {
 -   document.addEventListener('click', outsideClickHandler)
-+   document.getElementById('app').addEventListener('click', outsideClickHandler)
++   document.querySelector('#app').addEventListener('click', outsideClickHandler)
   }, [])
 
   const removeOutsideClickHandler = useCallback(() => {
 -   document.removeEventListener('click', outsideClickHandler)
-+   document.getElementById('app').removeEventListener('click', outsideClickHandler)
++   document.querySelector('#app').removeEventListener('click', outsideClickHandler)
   }, [])
 ...
 ```
@@ -301,6 +312,8 @@ React17ではイベントの委譲先がrootNodeになったということを�
 2. openボタンから`div#app`に委譲されたイベントハンドラによって、メニューを表示し`div#app`に`outsideClickHandler`を追加
 3. 2の終了時で`outsideClickHandler`は`div#app`というReactのイベント委譲先と同じ階層に設定されただけなので、バブリングによって`outsideClickHandler`の処理が即座に発火することはない
 
+@[codepen](https://codepen.io/co9xsr/pen/RwKmojG?default-tab=js,result)
+
 これで期待通りに動作するようになりました🎉
 お疲れさまでした!
 ## 補足
@@ -310,7 +323,7 @@ React17ではイベントの委譲先がrootNodeになったということを�
 - useEffectを使ってイベントリスナの追加・削除を管理する
 
 などです。
-むしろこっちのほうが簡単かもしれませんが、今回は割愛します。
+むしろこっちのほうが簡単かもしれませんが、今回の趣旨と外れるので割愛します。
 
 # まとめ
 本記事ではReact17におけるevent delegationの破壊的変更をまとめました。
