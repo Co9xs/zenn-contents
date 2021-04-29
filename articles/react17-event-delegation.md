@@ -3,7 +3,7 @@ title: "React17のevent delegationの破壊的変更を理解する"
 emoji: "👍"
 type: "tech"
 topics: ["React", "JavaScript", "TypeScript", "フロントエンド", "tips"]
-published: false
+published: true
 ---
 
 React17が出てからしばらく経ちましたが、React17の破壊的変更で既存コードが動かないということがあり、調査と修正を行いました。
