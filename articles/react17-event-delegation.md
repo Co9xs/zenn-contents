@@ -7,10 +7,10 @@ published: false
 ---
 
 React17が出てからしばらく経ちましたが、React17の破壊的変更で既存コードが動かないということがあり、調査と修正を行いました。
-そこで挙動がどのように変化したのかなどの調査を行ったので自分自身の理解を整理することも兼ねてまとめておきます。
+そこで調査の過程で得られたことを、自分自身の理解の整理も兼ねてまとめておきます。
 
 本記事ではReact17の破壊的変更のうち、event delegationにおけるイベントの委譲先の変更について取り上げます。
-この変更については[公式ブログ](https://ja.reactjs.org/blog/2020/08/10/react-v17-rc.html)での説明がわかりやすかったですが、実際にどんなユースケースで問題になるのかという点を詳しく解説できたらと思います。
+この変更については[公式ブログ](https://ja.reactjs.org/blog/2020/08/10/react-v17-rc.html)での説明がとても分かりやすかったですが、実際にどんなユースケースで問題になるのかという点を詳しく解説できたらと思います。
 # event delegation（イベントの委譲）とは？
 いきなり聞き慣れない言葉なので、まずはevent delegationとは何かという部分から確認していきましょう。
 通常Reactでイベントハンドラを登録する場合、以下のようにインラインで記述します。
@@ -25,10 +25,13 @@ document.getElementById('myButton').addEventListenrer('click', handleClick)
 ReactはDOMノードにイベントハンドラを直接追加することはせず、イベントタイプごとにハンドラを1つだけ`document`オブジェクトに付与します。
 この挙動は実際にブラウザで確認することができるので試してみましょう。
 
-先ほど例で挙げたような、ボタンにイベントハンドラを設定したReactコンポーネントをブラウザで確認してみます。
+先ほど例で挙げたような、ボタンにイベントハンドラを設定したReactコンポーネントをブラウザの検証ツールで見てみました。
 すると`document`オブジェクトに対してclickイベントのハンドラが1つだけ登録されていることが分かります。
+逆に`button`からonClickイベントを削除すれば`document`からも消えます。
 ![React16系のイベントデリゲーション](https://storage.googleapis.com/zenn-user-upload/tciup6b0jpyc60hzwzymr0v6l47l)
-このようにすべてのベントハンドラを`document`オブジェクトに対して設定するというのがReact16までのevent delegationという仕組みです。
+*documentのclickに対してイベントハンドラが設定されている*
+
+このように、ほぼすべてのイベントハンドラを内部的に`document`オブジェクトに対して設定するというのがReact16までのevent delegationという仕組みです。
 # React17でevent delegationはどう変わったのか？
 では、React17ではevent delegationの挙動がどのように変わったのでしょうか？
 一言でいうと、イベントハンドラの設定先が`document`から`Reactアプリがマウントされるルート要素`に変わりました。
@@ -38,10 +41,11 @@ ReactはDOMノードにイベントハンドラを直接追加することはせ
 ![イベントの委譲のイメージ図](https://ja.reactjs.org/static/bb4b10114882a50090b8ff61b3c4d0fd/31868/react_17_delegation.png)
 *公式ブログから引用*
 
-この変更もブラウザで確認することができます。
+この変更も同じくブラウザの検証ツールで確認することができます。
 reactを17系にして、先ほどと同じボタンのコンポーネントをブラウザで確認してみましょう。
 すると`document`オブジェクトではなく、`div#app`に対してイベントハンドラが設定されていることが分かりますね。
 ![React17系のイベントデリゲーション](https://storage.googleapis.com/zenn-user-upload/s00bizro0cdhk60nvrtln1yqsfso)
+*div#appのclickに対してイベントハンドラが設定されている*
 
 ここまでのポイントは以下の2点です。
 - React16までは`document`に対してイベントが委譲される。
@@ -50,17 +54,19 @@ reactを17系にして、先ほどと同じボタンのコンポーネントを�
 それでは、この2点を踏まえてどんなケースでこの変更が問題になるのかを実際に見ていきます。
 # 問題となるケース
 さて、ここまではevent delegationの概要とReact17でどんな変更があったかを見てきました。
-ここからはこの変更がどんなケースで問題になったのかを、実例を交えて紹介していきます。
+ここからはこの破壊的変更がどんなケースで問題になったのかを、実例を交えて紹介していきます。
 
 ## ポップアップメニューを考える
 event delegationの破壊的変更がどんな影響を与えるのかを知るために、以下のような仕様をもつPopupMenuコンポーネントを考えます。
-- openボタンを押したらPopupMenuが表示される
-- 開いている状態でPopupMenuの範囲外（openボタンを含む）をクリックするとPopupMenuを閉じる
-- PopupMenu内のcloseボタンを押すとPopupMenuを閉じる
+- openボタンをクリックすると、メニューが開く
+- 開いている状態でメニューの範囲外(openボタン含む)をクリックすると、メニューが閉じる
+- メニュー内のcloseボタンをクリックすると、メニューが閉じる
+
+実際の動きと一緒に確認してみてください。非常によくあるUIですね。
 
 --- gif ---
 
-いきなりですがReact16で動作するコードの全体像を載せておきます。
+いきなりですが、このPopupMenuコンポーネントをReact16で動作するように実装したコードの全体像を載せておきます。
 
 ```tsx: PopupMenu.tsx
 import React, { useCallback, useRef, useState } from 'react';
@@ -106,8 +112,9 @@ export const PopupMenu: React.VFC<Props> = (props) => {
   )
 };
 ```
-少し長いですが、少しずつ分割して確認していきましょう。
-まず`useState`でpopupの表示・非表示の状態を管理します。
+長いですが、少しずつ分割して確認していきましょう。
+
+まず`useState`でメニューの表示・非表示の状態を管理しています。
 本記事ではスタイルは省略しますが、表示・非表示のスタイルを当てるため、`data-popup-active`というカスタムdata属性を付与しています。
 ```tsx: PopupMenu.tsx
 const [isOpen, setIsOpen] = useState<boolean>(false)
@@ -124,11 +131,11 @@ return (
 
 次に`outsideClickHandler`という関数を見てみましょう。
 
-ここでは`useRef`を使ってpopupのDOMへの参照を保存しています。
+ここでは`useRef`を使って開閉されるメニューのDOMへの参照を保存しています。
 `popupRef.current`で取得できる`Element`のスーパークラスである`Node`には `Node.contains()`というメソッドがあります。
 これは引数に指定したノードがこのノードの子孫ノード（自分自身を含む）であるかどうかを判定する関数なので、これを利用して範囲外クリックかどうかを判定しています。
 
-つまり、範囲外がクリックされたらpopupを閉じて自分自身を`document`のイベントリスナから削除するという処理を行っています。
+つまり、メニュー範囲外がクリックされたらメニューを閉じて自分自身を`document`のイベントリスナから削除するという処理を行っています。
 
 ```tsx: PopupMenu.tsx
 ...
@@ -143,9 +150,10 @@ const outsideClickHandler = useCallback((e: MouseEvent) => {
 
 最後に残りの部分です。
 
-- openボタンがクリックされたらpopupを表示して、`document`のclickイベントに対して`outsideClickHandler`を追加。
-- 逆にcloseボタンがクリックされたらpopupを非表示にして、`document`のclickイベントから`outsideClickHandler`を削除。
+- openボタンがクリックされたらメニューを表示して、`document`のclickイベントに対して`outsideClickHandler`を追加。
+- 逆にcloseボタンがクリックされたらメニューを非表示にして、`document`のclickイベントから`outsideClickHandler`を削除。
 という一連の処理を行うための関数です。
+
 ```tsx: PopupMenu.tsx
 ...
 const openButtonClickHandler = useCallback(() => {
@@ -168,7 +176,8 @@ const removeOutsideClickHandler = useCallback(() => {
 ...
 ```
 
-結果からいうとこのコードはReact16では問題なく動作します。
+前述したとおり、このコードはReact16では問題なく動作します。
+
 しかし、ここではなぜ「`document`に対して`outsideClickHandler`を追加している」のでしょうか？
 単に範囲外クリックを検知するためのイベントリスナを登録するだけなら、`document.body`などの要素でも問題ないように思えます。
 
@@ -177,36 +186,37 @@ const removeOutsideClickHandler = useCallback(() => {
 
 --- gif or CodePen ---
 
-openボタンでpopupを開き、closeボタンか範囲外クリックでpopupを閉じるということは問題なくできます。
-しかし、popupが開いている状態で、再度openボタンを押しても閉じることができません。
+openボタンでメニューを開き、closeボタンか範囲外クリックでメニューを閉じるということは問題なくできています。
+しかし、メニューが開いている状態で、再度openボタンをクリックしてみると、閉じることができません。
 
 何が起きているのかを以下にまとめてみました。
 
+### `document.body`に範囲外クリックのイベントリスナを設定した場合の処理の流れ（悪い例）
 1. 最初にopenボタンを押す
-2. openボタンから`document`に委譲されたイベントハンドラによって、popupを表示し`document.body`に`outsideClickHandler`を追加
+2. openボタンから`document`に委譲されたイベントハンドラによって、メニューを表示し`document.body`に`outsideClickHandler`を追加
 3. 再度openボタンを押すと`document` > `document.body`の階層関係であるので、バブリングによって`document.body`の処理→`document`の処理の順番で発火
-4. `document.body`のイベントによってpopupを閉じて、`document.body`から`outsideClickHandler`を削除
-5. openボタンから`document`に委譲されたイベントによってpopupを表示し、`document.body`に`outsideClickHandler`を追加
+4. `document.body`のイベントによってメニューを閉じて、`document.body`から`outsideClickHandler`を削除
+5. openボタンから`document`に委譲されたイベントによってメニューを表示し、`document.body`に`outsideClickHandler`を追加
 
-結果としてpopupが開いた状態で、openボタンを押しても閉じれないということになります。
+結果としてメニューが開いた状態で、openボタンを押しても閉じれないということになります。
+対して`document`に対してoutsideClickHandlerを設定した場合を見てみます。
 
---- 注意：よく考えたらoutsideClickHandlerにstopPropagation()をつけることでも3のバブリングを防げるのでうまく動く。 ---
-
-対してdocumentに対してoutsideClickHandlerを設定した場合を見てみます。
-
+:::message
+`outsideClickHandler`に`e.stopPropagation()`を加えることでも3のバブリングを防げるのでうまく動きますが、今回はevent delegationの挙動を理解する目的のため、`document`に設定する方法で対処していきます。
+:::
+### `document`に範囲外クリックのイベントリスナを設定した場合の処理の流れ（良い例）
 1. 最初にopenボタンを押す
-2. openボタンから`document`に委譲されたイベントハンドラによって、popupを表示し`document`に`outsideClickHandler`を追加
-3. 再度openボタンを押すと`document` = `document`の階層関係であるので、追加した順番にopneボタンから`document`に委譲された処理→`document`にあとから追加したoutsideClickHandler処理の順番で発火
-4. openボタンから`document`に委譲されたイベントハンドラによって、popupを表示し`document`に`outsideClickHandler`を追加
-5. documentに追加したoutsideClickHandlerの処理によって、popupを閉じてdocumentからoutsideClickHandlerを削除
+2. openボタンから`document`に委譲されたイベントハンドラによって、メニューを表示し`document`に`outsideClickHandler`を追加
+3. 再度openボタンを押すとどちらも`document`に対するイベントハンドラが設定されているので、追加された順番で発火
+（openボタンから`document`に委譲された処理→`document`にあとから追加した`outsideClickHandler`の処理の順番で発火)
+4. openボタンから`document`に委譲されたイベントハンドラによって、メニューを表示し`document`に`outsideClickHandler`を追加
+5. `document`にあとから追加した`outsideClickHandler`の処理によって、メニューを閉じて`document`から`outsideClickHandler`を削除
 
-このようにevent delegationによって委譲される先と同じ対象にあとからイベントリスナを追加してあげることで、ReactDOMの処理→あとから追加した処理という順番で処理してくれるようになるので期待通りに動作します。
-
-なおポップアップメニューのコードに関しては以下の記事を参考にさせていただきました🙇‍♂️
-https://qiita.com/G4RDSjp/items/58364a6655d4968a90d9
+このようにevent delegationによって委譲される先と同じ対象にあとからイベントリスナを追加してあげることで、ReactDOMの処理→あとから追加した処理という順番で処理してくれるようになるので期待通りに動作するというわけですね。
 ## このポップアップメニューをReact17で動作確認する
 ここまで確認してきた以下のコードはそのままに、react, react-domのバージョンを17系にあげてみます。
 
+:::details PopupMenuのコード(再掲)
 ```tsx: PopupMenu.tsx
 import React, { useCallback, useRef, useState } from 'react';
 import './PopupMenu.scss'
@@ -251,6 +261,7 @@ export const PopupMenu: React.VFC<Props> = (props) => {
   )
 };
 ```
+:::
 
 これを動作確認すると、そもそもopenボタンを押しても開くことができません。
 
@@ -259,15 +270,17 @@ export const PopupMenu: React.VFC<Props> = (props) => {
 React17ではイベントの委譲先がrootNodeになったということを思い出して、どんな処理が起きているのかを考えてみましょう。
 
 1. openボタンを押す
-2. openボタンから`div#app`に委譲されたイベントハンドラによって、popupを表示し`document`に`outsideClickHandler`を追加
+2. openボタンから`div#app`に委譲されたイベントハンドラによって、メニューを表示し`document`に`outsideClickHandler`を追加
 3. 2の終了時で`document` > `div#app`の階層関係なのでバブリングによって`document`の処理も即座に発火する
-4. `document`の処理でpopupを消して、`document`から`outsideClickHandler`を削除
+4. `document`の処理でメニューを消して、`document`から`outsideClickHandler`を削除
 
-つまり、openボタンを押してpopupを表示した瞬間に、documentに設定したoutsideClickHandlerでpopupが非表示にされてしまうということです。
-動くように修正していきます。
+つまり、openボタンを押してメニューを表示した瞬間に、`document`に設定した`outsideClickHandler`でメニューが非表示にされてしまうということです。
+
+これを動くように修正していきます。
 ## コードを修正する
-React17でも期待通りに動くように修正していきます。
-といっても修正箇所はそんなに多くありません。
+それではReact17でも期待通りに動くように修正していきます。
+修正といっても、`outsideClickHandler`の登録先をReact17のイベントの委譲先と同じ,`div#app`にしてあげるだけです。
+
 ```diff tsx: PopupMenu.tsx
 ...
   const addOutsideClickHandler = useCallback(() => {
@@ -282,9 +295,26 @@ React17でも期待通りに動くように修正していきます。
 ...
 ```
 
+この修正によって処理は以下のように変わります。
+
+1. openボタンを押す
+2. openボタンから`div#app`に委譲されたイベントハンドラによって、メニューを表示し`div#app`に`outsideClickHandler`を追加
+3. 2の終了時で`outsideClickHandler`は`div#app`というReactのイベント委譲先と同じ階層に設定されただけなので、バブリングによって`outsideClickHandler`の処理が即座に発火することはない
+
+これで期待通りに動作するようになりました🎉
+お疲れさまでした!
+## 補足
+今回はevent delegationの挙動を理解する目的のため、イベントの委譲先と同じオブジェクトに自分で追加したいイベントハンドラを追加するという方針で修正しましたが、他にも色々やり方があると思います。
+例えば、
+- メニューが開いている時に、画面いっぱいの背景要素を表示して、それに対してクリックイベントを追加する
+- useEffectを使ってイベントリスナの追加・削除を管理する
+
+などです。
+むしろこっちのほうが簡単かもしれませんが、今回は割愛します。
+
 # まとめ
 本記事ではReact17におけるevent delegationの破壊的変更をまとめました。
-今回紹介したPopupMenuのようにdocumentに対してイベントリスナを自分で設定するようなケースは少ないかもしれませんが、理解の助けとなれば幸いです。
+今回紹介したPopupMenuのようにdocumentに対してイベントリスナを自分で設定するようなケースは少ないかもしれませんが、少しでも理解の助けとなれば幸いです。
 # 参考記事
 https://ja.reactjs.org/blog/2020/08/10/react-v17-rc.html
 https://qiita.com/G4RDSjp/items/58364a6655d4968a90d9
