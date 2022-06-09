@@ -18,6 +18,6 @@
   },
   "homepage": "https://github.com/Co9xs/zenn-contents#readme",
   "dependencies": {
-    "zenn-cli": "^0.1.79"
+    "zenn-cli": "^0.1.111"
   }
 }
