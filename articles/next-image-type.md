@@ -4,7 +4,6 @@ emoji: "✋"
 type: "tech"
 topics: ["React", "Next.js", "TypeScript", "フロントエンド", "tips"]
 published: true
-published_at: 2022-06-09 19:30
 ---
 
 next/image をラップしたコンポーネントを作る機会があり、せっかくなら width, height の指定を型レベルで強制したいと感じたのでメモ。
