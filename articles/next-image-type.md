@@ -107,6 +107,21 @@ type Props<T extends ImageProps["layout"]> = T extends "fill"
 ![layout="fill" 以外を指定して width, height の指定を忘れると type error になる](/images/next-image-type/next-image-type-error.png)
 _layout="fill" 以外を指定して width, height の指定を忘れると type error になる_
 
+# 追記（2022/06/12）
+コメントで補足いただいたので、追記です。
+
+Next.js の webpack loader の機能によって静的に import された画像は width, height を自動的に取得してくれるので、layout="fill" 以外を指定した場合でも width, height の指定は不要になっています。
+
+>Next.js will automatically determine the width and height of your image based on the imported file. These values are used to prevent Cumulative Layout Shift while your image is loading.
+
+https://nextjs.org/docs/basic-features/image-optimization#local-images
+
+ただ、storybook と next/image を併用する場合はこの機能が利用できないので、layout="fill" 以外を指定した状態で width, height の指定が抜けているとランタイムエラーになります。
+
+そのため本記事で紹介した方法は storybook で next/image を型安全に使用するための tips として活用していただけると幸いです！
+
+
+
 # 参考URL
 - https://nextjs.org/docs/api-reference/next/image#layout
 - https://www.forcia.com/blog/001561.html
